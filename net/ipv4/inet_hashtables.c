@@ -23,7 +23,6 @@
 #include <net/inet_hashtables.h>
 #include <net/secure_seq.h>
 #include <net/ip.h>
-#include <net/htc_net_debug.h>
 
 /*
  * Allocate and initialize a new local port bind bucket.
@@ -89,11 +88,6 @@ static void __inet_put_port(struct sock *sk)
 	spin_lock(&head->lock);
 	tb = inet_csk(sk)->icsk_bind_hash;
 	__sk_del_bind_node(sk);
-
-	NET_DEBUG("%s: [0x%p] sk:0x%p, sk_state:%d, pid:%d, process:%s.\n", __func__, current_thread_info()->task, sk, sk->sk_state, current->pid, current->comm);
-	if(!tb)
-		net_dumplog();
-
 	tb->num_owners--;
 	inet_csk(sk)->icsk_bind_hash = NULL;
 	inet_sk(sk)->inet_num = 0;

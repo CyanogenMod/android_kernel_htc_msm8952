@@ -284,8 +284,6 @@
 #include <asm/uaccess.h>
 #include <asm/ioctls.h>
 
-#include <net/htc_net_debug.h>
-
 int sysctl_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
 
 int sysctl_tcp_min_tso_segs __read_mostly = 2;
@@ -2005,11 +2003,8 @@ void tcp_set_state(struct sock *sk, int state)
 
 		sk->sk_prot->unhash(sk);
 		if (inet_csk(sk)->icsk_bind_hash &&
-		    !(sk->sk_userlocks & SOCK_BINDPORT_LOCK)){
-			NET_DEBUG("%s: [0x%p] sk:0x%p, oldstate:%d, state:%d, pid:%d, process:%s.\n",
-					  __func__, current_thread_info()->task, sk, oldstate, state, current->pid, current->comm);
+		    !(sk->sk_userlocks & SOCK_BINDPORT_LOCK))
 			inet_put_port(sk);
-		}
 		/* fall through */
 	default:
 		if (oldstate == TCP_ESTABLISHED)

@@ -85,8 +85,6 @@
 #include <linux/crypto.h>
 #include <linux/scatterlist.h>
 
-#include <net/htc_net_debug.h>
-
 int sysctl_tcp_tw_reuse __read_mostly;
 int sysctl_tcp_low_latency __read_mostly;
 EXPORT_SYMBOL(sysctl_tcp_low_latency);
@@ -2210,11 +2208,8 @@ void tcp_v4_destroy_sock(struct sock *sk)
 	__skb_queue_purge(&tp->ucopy.prequeue);
 
 	/* Clean up a referenced TCP bind bucket. */
-	if (inet_csk(sk)->icsk_bind_hash){
-		NET_DEBUG("%s: [0x%p] sk:0x%p, sk_state:%d, pid:%d, process:%s.\n",
-				  __func__, current_thread_info()->task, sk, sk->sk_state, current->pid, current->comm);
+	if (inet_csk(sk)->icsk_bind_hash)
 		inet_put_port(sk);
-	}
 
 	BUG_ON(tp->fastopen_rsk != NULL);
 
