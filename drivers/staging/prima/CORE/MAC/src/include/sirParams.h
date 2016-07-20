@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -130,6 +130,7 @@ typedef enum {
    MGMT_FRAME_LOGGING    = 53,
    ENHANCED_TXBD_COMPLETION = 54,
    LOGGING_ENHANCEMENT   = 55,
+   ANTENNA_DIVERSITY_SELECTION  = 62,
    //MAX_FEATURE_SUPPORTED = 128
 } placeHolderInCapBitmap;
 
@@ -712,8 +713,12 @@ typedef struct sSirMbMsgP2p
 #define SIR_HAL_MON_START_REQ               (SIR_HAL_ITC_MSG_TYPES_BEGIN + 269)
 #define SIR_HAL_MON_STOP_REQ                (SIR_HAL_ITC_MSG_TYPES_BEGIN + 270)
 #define SIR_HAL_FATAL_EVENT_LOGS_REQ         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 271)
-
 #define SIR_HAL_LPHB_CONF_IND              (SIR_HAL_ITC_MSG_TYPES_BEGIN + 272)
+#define SIR_HAL_LOST_LINK_PARAMS_IND         (SIR_HAL_ITC_MSG_TYPES_BEGIN + 273)
+#define SIR_HAL_SEND_FREQ_RANGE_CONTROL_IND  (SIR_HAL_ITC_MSG_TYPES_BEGIN + 274)
+#define SIR_HAL_SEND_LOG_DONE_IND            (SIR_HAL_ITC_MSG_TYPES_BEGIN + 275)
+#define SIR_HAL_ANTENNA_DIVERSITY_SELECTION_REQ (SIR_HAL_ITC_MSG_TYPES_BEGIN + 283)
+#define SIR_HAL_SET_ALLOWED_ACTION_FRAMES  (SIR_HAL_ITC_MSG_TYPES_BEGIN + 284)
 
 #define SIR_HAL_MSG_TYPES_END              (SIR_HAL_MSG_TYPES_BEGIN + 0x1FF)
 // CFG message types

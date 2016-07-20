@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2013 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2013, 2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -520,10 +520,16 @@ typedef enum
   WDI_TDLS_CHAN_SWITCH_REQ,
   WDI_SET_RTS_CTS_HTVHT_IND,
   WDI_FW_LOGGING_DXE_DONE_IND,
+  WDI_SEND_FREQ_RANGE_CONTROL_IND,
 
   /*Keep adding the indications to the max request
-    such that we keep them sepparate */
+    such that we keep them separate */
+  WDI_ANTENNA_DIVERSITY_SELECTION_REQ,
+
+  WDI_SET_ALLOWED_ACTION_FRAMES_IND,
+
   WDI_MAX_UMAC_IND
+
 }WDI_RequestEnumType;
 
 /*--------------------------------------------------------------------------- 
@@ -900,6 +906,8 @@ typedef enum
   WDI_TDLS_CHAN_SWITCH_REQ_RESP      = WDI_HAL_IND_MIN + 26,
   WDI_HAL_DEL_BA_IND                 = WDI_HAL_IND_MIN + 27,
   WDI_HAL_NAN_EVENT                  = WDI_HAL_IND_MIN + 28,
+  WDI_HAL_LOST_LINK_PARAMS_IND       = WDI_HAL_IND_MIN + 29,
+  WDI_ANTENNA_DIVERSITY_SELECTION_RSP = WDI_HAL_IND_MIN + 30,
   WDI_MAX_RESP
 }WDI_ResponseEnumType; 
 
@@ -6239,6 +6247,27 @@ WDI_ProcessNanEvent
   WDI_EventInfoType*     pEventData
 );
 
+
+/**
+*@brief Process Lost Link param function (called when
+        an indication is being received over the
+        bus from HAL)
+
+ @param  pWDICtx:         pointer to the WLAN DAL context
+         pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+
+WDI_Status
+WDI_Process_LostLinkParamInd
+(
+    WDI_ControlBlockType*  pWDICtx,
+    WDI_EventInfoType*     pEventData
+);
+
+
 /**
  @brief WDI_ProcessSetRtsCtsHtvhtInd
         Set RTS/CTS indication for diff modes.
@@ -6283,6 +6312,60 @@ WDI_ProcessMonStopRsp
 (
    WDI_ControlBlockType*  pWDICtx,
    WDI_EventInfoType*     pEventData
+);
+
+WDI_Status
+WDI_ProcessEnableDisableCAEventInd
+(
+  WDI_ControlBlockType*  pWDICtx,
+  WDI_EventInfoType*     pEventData
+);
+
+/**
+ @brief Process get current antenna index command
+
+ @param  pWDICtx:         pointer to the WLAN DAL context
+         pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+WDI_Status
+WDI_ProcessGetCurrentAntennaIndex
+(
+    WDI_ControlBlockType*  pWDICtx,
+    WDI_EventInfoType*     pEventData
+);
+
+/**
+ @brief Process get current antenna index response from FW
+
+ @param  pWDICtx:         pointer to the WLAN DAL context
+         pEventData:      pointer to the event information structure
+
+ @see
+ @return Result of the function call
+*/
+WDI_Status
+WDI_ProcessGetCurrentAntennaIndexRsp
+(
+  WDI_ControlBlockType*  pWDICtx,
+  WDI_EventInfoType*     pEventData
+);
+
+/**
+ *  WDI_ProcessSetAllowedActionFramesInd - Process Set allowed action
+ *                                         frames command
+ *
+ *  @pWDICtx: pointer to the WLAN DAL context
+ *  @pEventData: pointer to the event information structure
+ *
+ */
+WDI_Status
+WDI_ProcessSetAllowedActionFramesInd
+(
+ WDI_ControlBlockType*  pWDICtx,
+ WDI_EventInfoType*     pEventData
 );
 
 #endif /*WLAN_QCT_WDI_I_H*/
