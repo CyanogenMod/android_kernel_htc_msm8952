@@ -511,6 +511,7 @@ typedef enum
     eCSR_ROAM_ESE_BCN_REPORT_IND,
 #endif /* FEATURE_WLAN_ESE && FEATURE_WLAN_ESE_UPLOAD */
     eCSR_ROAM_UPDATE_MAX_RATE_IND,
+    eCSR_ROAM_LOST_LINK_PARAMS_IND,
 }eRoamCmdStatus;
 
 
@@ -1193,6 +1194,7 @@ typedef struct tagCsrConfigParam
     tANI_U32 nOBSSScanWidthTriggerInterval;
     tANI_U8 roamDelayStatsEnabled;
     tANI_BOOLEAN ignorePeerHTopMode;
+    tANI_BOOLEAN disableP2PMacSpoofing;
 }tCsrConfigParam;
 
 //Tush
@@ -1243,6 +1245,7 @@ typedef struct tagCsrRoamInfo
         tSirMicFailureInfo *pMICFailureInfo;
         tCsrRoamConnectedProfile *pConnectedProfile;
         tSirWPSPBCProbeReq *pWPSPBCProbeReq;
+        tSirLostLinkParamsInfo *pLostLinkParams;
     } u;
 
     tANI_BOOLEAN wmmEnabledSta;   //set to true if WMM enabled STA
@@ -1663,6 +1666,18 @@ typedef void ( *tCsrTsmStatsCallback) (tAniTrafStrmMetrics tsmMetrics, tANI_U32 
 
 ---------------------------------------------------------------------------*/
 typedef void (*tCsrSnrCallback) (v_S7_t snr, tANI_U32 staId, void *pContext);
+
+/*---------------------------------------------------------------------------
+  This is the type for a get current antenna callback to be registered with SME
+  for getting cuurently used antenna index
+
+  \param antennaId to be filled by firmware.
+  \param pContext - any user data given at callback registration.
+  \return None
+
+---------------------------------------------------------------------------*/
+typedef void ( *tCsrAntennaIndexCallback) (int antennaId, void *pContext);
+
 
 #ifdef WLAN_FEATURE_VOWIFI_11R
 eHalStatus csrRoamIssueFTPreauthReq(tHalHandle hHal, tANI_U32 sessionId, tpSirBssDescription pBssDescription);
