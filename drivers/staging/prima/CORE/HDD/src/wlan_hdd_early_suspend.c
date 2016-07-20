@@ -373,6 +373,7 @@ VOS_STATUS hdd_enter_deep_sleep(hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter)
        hddLog(VOS_TRACE_LEVEL_ERROR, "%s: vos_stop return failed %d",
                 __func__, vosStatus);
        VOS_ASSERT(0);
+       VOS_BUG(0);
    }
 
    pHddCtx->hdd_ps_state = eHDD_SUSPEND_DEEP_SLEEP;
@@ -412,6 +413,7 @@ VOS_STATUS hdd_exit_deep_sleep(hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter)
    {
       VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
          "%s: Failed in vos_start",__func__);
+      VOS_BUG(0);
       goto err_deep_sleep;
    }
 
@@ -1095,7 +1097,7 @@ VOS_STATUS hdd_conf_arp_offload(hdd_adapter_t *pAdapter, int fenable)
    tSirHostOffloadReq  offLoadRequest;
    hdd_context_t *pHddCtx = WLAN_HDD_GET_CTX(pAdapter);
 
-   hddLog(VOS_TRACE_LEVEL_INFO, FL(" fenable = %d \n"), fenable);
+   hddLog(VOS_TRACE_LEVEL_INFO, FL(" fenable = %d "), fenable);
 
    if(fenable)
    {
@@ -1506,7 +1508,8 @@ static void hdd_PowerStateChangedCB
    /* if the driver was not in BMPS during early suspend,
     * the dynamic DTIM is now updated at Riva */
    if ((newState == BMPS) && pHddCtx->hdd_wlan_suspended
-           && pHddCtx->cfg_ini->enableDynamicDTIM
+           && (pHddCtx->cfg_ini->enableDynamicDTIM ||
+               pHddCtx->cfg_ini->enableModulatedDTIM)
            && (pHddCtx->hdd_ignore_dtim_enabled == FALSE))
    {
        pHddCtx->hdd_ignore_dtim_enabled = TRUE;
@@ -1962,22 +1965,22 @@ VOS_STATUS hdd_wlan_shutdown(void)
     */
    /* Wait for MC to exit */
    hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down MC thread",__func__);
-   set_bit(MC_SHUTDOWN_EVENT_MASK, &vosSchedContext->mcEventFlag);
-   set_bit(MC_POST_EVENT_MASK, &vosSchedContext->mcEventFlag);
+   set_bit(MC_SHUTDOWN_EVENT, &vosSchedContext->mcEventFlag);
+   set_bit(MC_POST_EVENT, &vosSchedContext->mcEventFlag);
    wake_up_interruptible(&vosSchedContext->mcWaitQueue);
    wait_for_completion(&vosSchedContext->McShutdown);
 
    /* Wait for TX to exit */
    hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down TX thread",__func__);
-   set_bit(TX_SHUTDOWN_EVENT_MASK, &vosSchedContext->txEventFlag);
-   set_bit(TX_POST_EVENT_MASK, &vosSchedContext->txEventFlag);
+   set_bit(TX_SHUTDOWN_EVENT, &vosSchedContext->txEventFlag);
+   set_bit(TX_POST_EVENT, &vosSchedContext->txEventFlag);
    wake_up_interruptible(&vosSchedContext->txWaitQueue);
    wait_for_completion(&vosSchedContext->TxShutdown);
 
    /* Wait for RX to exit */
    hddLog(VOS_TRACE_LEVEL_FATAL, "%s: Shutting down RX thread",__func__);
-   set_bit(RX_SHUTDOWN_EVENT_MASK, &vosSchedContext->rxEventFlag);
-   set_bit(RX_POST_EVENT_MASK, &vosSchedContext->rxEventFlag);
+   set_bit(RX_SHUTDOWN_EVENT, &vosSchedContext->rxEventFlag);
+   set_bit(RX_POST_EVENT, &vosSchedContext->rxEventFlag);
    wake_up_interruptible(&vosSchedContext->rxWaitQueue);
 
    wait_for_completion(&vosSchedContext->RxShutdown);
@@ -2186,6 +2189,7 @@ VOS_STATUS hdd_wlan_re_init(void)
    if ( !VOS_IS_STATUS_SUCCESS( vosStatus ) )
    {
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: vos_start failed",__func__);
+      VOS_BUG(0);
       goto err_vosclose;
    }
 
@@ -2326,6 +2330,7 @@ err_vosclose:
        pHddCtx->cfg_ini= NULL;
 
        wiphy_unregister(pHddCtx->wiphy);
+       hdd_wlan_free_wiphy_channels(pHddCtx->wiphy);
        wiphy_free(pHddCtx->wiphy);
    }
    vos_preClose(&pVosContext);

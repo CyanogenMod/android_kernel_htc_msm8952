@@ -2220,7 +2220,53 @@ static int hdd_cmd_setFccChannel(hdd_context_t *pHddCtx, tANI_U8 *cmd,
     return ret;
 }
 
+/**---------------------------------------------------------------------------
 
+  \brief hdd_enable_disable_ca_event() - When Host sends IOCTL (enabled),
+         FW will send *ONE* CA ind to Host(even though it is duplicate).
+         When Host send IOCTL (disable), FW doesn't perform any action.
+         Whenever any change in CA *and* WLAN is in SAP/P2P-GO mode, FW
+         sends CA ind to host. (regard less of IOCTL status)
+  \param  - pHddCtx - HDD context
+  \param  - command - command received from framework
+  \param  - cmd_len - len of the command
+
+  \return - 0 on success, appropriate error values on failure.
+
+  --------------------------------------------------------------------------*/
+int hdd_enable_disable_ca_event(hdd_context_t *pHddCtx, tANI_U8* command, tANI_U8 cmd_len)
+{
+   tANI_U8 set_value;
+   int ret = 0;
+   eHalStatus status;
+
+   ret = wlan_hdd_validate_context(pHddCtx);
+   if (0 != ret)
+   {
+       ret = -EINVAL;
+       goto exit;
+   }
+
+   if (pHddCtx->cfg_ini->gOptimizeCAevent == 0)
+   {
+       hddLog(VOS_TRACE_LEVEL_ERROR, "Enable gOptimizeCAevent"
+             " ini param to control channel avooidance indication");
+       ret = 0;
+       goto exit;
+   }
+
+   set_value = command[cmd_len + 1] - '0';
+   status = sme_enableDisableChanAvoidIndEvent(pHddCtx->hHal, set_value);
+   if (status != eHAL_STATUS_SUCCESS)
+   {
+       hddLog(VOS_TRACE_LEVEL_ERROR, "%s: Failed to send"
+             " enableDisableChanAoidance command to SME\n", __func__);
+       ret = -EINVAL;
+   }
+
+exit:
+   return ret;
+}
 
 static int hdd_driver_command(hdd_adapter_t *pAdapter,
                               hdd_priv_data_t *ppriv_data)
@@ -3414,7 +3460,7 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
                                            pHddStaCtx->conn_info.bssId, sizeof(tSirMacAddr)))
            {
                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s:Reassoc BSSID is same as currently associated AP bssid",__func__);
-               ret = -EINVAL;
+               ret = 0;
                goto exit;
            }
 
@@ -3424,7 +3470,9 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            {
                hddLog(VOS_TRACE_LEVEL_ERROR,
                       "%s: Invalid Channel [%d]", __func__, channel);
-               return -EINVAL;
+
+               ret = -EINVAL;
+               goto exit;
            }
 
            /* Proceed with reassoc */
@@ -4297,7 +4345,13 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of TDLSOFFCH*/
            value += 26;
-           sscanf(value, "%d", &set_value);
+           if (!(sscanf(value, "%d", &set_value))) {
+               VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                               FL("No input identified"));
+               ret = -EINVAL;
+               goto exit;
+           }
+
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel offset:%d",
                      __func__, set_value);
@@ -4313,7 +4367,13 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of tdlsoffchnmode*/
            value += 18;
-           sscanf(value, "%d", &set_value);
+           ret = sscanf(value, "%d", &set_value);
+           if (ret != 1) {
+                VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                           FL("No input identified"));
+               ret = -EINVAL;
+               goto exit;
+           }
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel mode:%d",
                      __func__, set_value);
@@ -4328,7 +4388,14 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            int set_value;
            /* Move pointer to ahead of TDLSOFFCH*/
            value += 14;
-           sscanf(value, "%d", &set_value);
+           ret = sscanf(value, "%d", &set_value);
+           if (ret != 1) {
+               VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                     "Wrong value is given for hdd_set_tdls_offchannel");
+               ret = -EINVAL;
+               goto exit;
+           }
+
            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
                      "%s: Tdls offchannel num: %d",
                      __func__, set_value);
@@ -4454,6 +4521,10 @@ static int hdd_driver_command(hdd_adapter_t *pAdapter,
            * country code is set
            */
            ret = hdd_cmd_setFccChannel(pHddCtx, command, 15);
+       }
+       else if (strncasecmp(command, "DISABLE_CA_EVENT", 16) == 0)
+       {
+           ret = hdd_enable_disable_ca_event(pHddCtx, command, 16);
        }
        else {
            MTRACE(vos_trace(VOS_MODULE_ID_HDD,
@@ -4639,17 +4710,18 @@ static VOS_STATUS hdd_parse_ese_beacon_req(tANI_U8 *pValue,
     /*no argument followed by spaces*/
     if ('\0' == *inPtr) return -EINVAL;
 
-    /*getting the first argument ie measurement token*/
+    /*getting the first argument ie Number of IE fields */
     v = sscanf(inPtr, "%31s ", buf);
     if (1 != v) return -EINVAL;
 
     v = kstrtos32(buf, 10, &tempInt);
     if ( v < 0) return -EINVAL;
 
+    tempInt = VOS_MIN(tempInt, SIR_ESE_MAX_MEAS_IE_REQS);
     pEseBcnReq->numBcnReqIe = tempInt;
 
-    VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO_HIGH,
-               "Number of Bcn Req Ie fields(%d)", pEseBcnReq->numBcnReqIe);
+    hddLog(LOG1, "Number of Bcn Req Ie fields: %d", pEseBcnReq->numBcnReqIe);
+
 
     for (j = 0; j < (pEseBcnReq->numBcnReqIe); j++)
     {
@@ -6456,9 +6528,12 @@ void hdd_cleanup_actionframe( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter )
                      msecs_to_jiffies(ACTION_FRAME_TX_TIMEOUT));
       if (rc <= 0)
       {
-         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-              "%s ERROR: HDD Wait for Action Confirmation Failed!! %ld"
-               , __func__, rc);
+          VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "%s ERROR: HDD Wait for Action Confirmation Failed!! %ld"
+                  , __func__, rc);
+
+          // Inform tx status as FAILURE to upper layer and free cfgState->buf
+          hdd_sendActionCnf( pAdapter, FALSE );
       }
    }
    return;
@@ -6808,6 +6883,24 @@ VOS_STATUS hdd_disable_bmps_imps(hdd_context_t *pHddCtx, tANI_U8 session_type)
    }
    return status;
 }
+
+void hdd_monPostMsgCb(tANI_U32 *magic, struct completion *cmpVar)
+{
+    if (magic == NULL || cmpVar == NULL) {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("invalid arguments %p %p"), magic, cmpVar);
+        return;
+    }
+    if (*magic != MON_MODE_MSG_MAGIC) {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("maic: %x"), *magic);
+        return;
+    }
+
+    complete(cmpVar);
+    return;
+}
+
 void hdd_init_mon_mode (hdd_adapter_t *pAdapter)
  {
     hdd_mon_ctx_t *pMonCtx = NULL;
@@ -7257,6 +7350,7 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
    {
       case WLAN_HDD_INFRA_STATION:
       case WLAN_HDD_P2P_CLIENT:
+      case WLAN_HDD_IBSS:
       case WLAN_HDD_P2P_DEVICE:
       {
          hdd_station_ctx_t *pstation = WLAN_HDD_GET_STATION_CTX_PTR(pAdapter);
@@ -7316,7 +7410,8 @@ VOS_STATUS hdd_stop_adapter( hdd_context_t *pHddCtx, hdd_adapter_t *pAdapter,
             hdd_abort_mac_scan(pHddCtx, pScanInfo->sessionId,
                                eCSR_SCAN_ABORT_DEFAULT);
          }
-       if (pAdapter->device_mode != WLAN_HDD_INFRA_STATION)
+       if ((pAdapter->device_mode != WLAN_HDD_INFRA_STATION) &&
+                   (pAdapter->device_mode != WLAN_HDD_IBSS))
        {
           while (pAdapter->is_roc_inprogress)
           {
@@ -7622,8 +7717,7 @@ VOS_STATUS hdd_start_all_adapters( hdd_context_t *pHddCtx )
 
             connState = (WLAN_HDD_GET_STATION_CTX_PTR(pAdapter))->conn_info.connState;
 
-            if (!pHddCtx->isLogpInProgress)
-                hdd_init_station_mode(pAdapter);
+            hdd_init_station_mode(pAdapter);
 
             /* Open the gates for HDD to receive Wext commands */
             pAdapter->isLinkUpSvcNeeded = FALSE; 
@@ -7713,7 +7807,13 @@ VOS_STATUS hdd_reconnect_all_adapters( hdd_context_t *pHddCtx )
          hddLog(VOS_TRACE_LEVEL_INFO,
             "%s: Set HDD connState to eConnectionState_NotConnected",
                    __func__);
+         spin_lock_bh(&pAdapter->lock_for_active_session);
+         if (eConnectionState_Associated ==  pHddStaCtx->conn_info.connState)
+         {
+             wlan_hdd_decr_active_session(pHddCtx, pAdapter->device_mode);
+         }
          pHddStaCtx->conn_info.connState = eConnectionState_NotConnected;
+         spin_unlock_bh(&pAdapter->lock_for_active_session);
          init_completion(&pAdapter->disconnect_comp_var);
          sme_RoamDisconnect(pHddCtx->hHal, pAdapter->sessionId,
                              eCSR_DISCONNECT_REASON_UNSPECIFIED);
@@ -7956,6 +8056,34 @@ hdd_adapter_t * hdd_get_adapter_by_name( hdd_context_t *pHddCtx, tANI_U8 *name )
 
 } 
 
+hdd_adapter_t *hdd_get_adapter_by_sme_session_id( hdd_context_t *pHddCtx,
+                                        tANI_U32 sme_session_id )
+{
+    hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
+    hdd_adapter_t *pAdapter;
+    VOS_STATUS vos_status;
+
+
+    vos_status = hdd_get_front_adapter( pHddCtx, &pAdapterNode);
+
+    while ((NULL != pAdapterNode) && (VOS_STATUS_SUCCESS == vos_status))
+    {
+        pAdapter = pAdapterNode->pAdapter;
+
+        if (pAdapter->sessionId == sme_session_id)
+            return pAdapter;
+
+        vos_status = hdd_get_next_adapter(pHddCtx, pAdapterNode, &pNext);
+        pAdapterNode = pNext;
+    }
+
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+            "%s: sme_session_id %d does not exist with host",
+            __func__, sme_session_id);
+
+    return NULL;
+}
+
 hdd_adapter_t * hdd_get_adapter( hdd_context_t *pHddCtx, device_mode_t mode )
 {
    hdd_adapter_list_node_t *pAdapterNode = NULL, *pNext = NULL;
@@ -8127,6 +8255,14 @@ static void __hdd_set_multicast_list(struct net_device *dev)
       }
    }
 
+   if (pHddCtx->hdd_wlan_suspended)
+   {
+       /*
+        * Configure the Mcast address list to FW
+        * If wlan is already in suspend mode
+        */
+       wlan_hdd_set_mc_addr_list(pAdapter, TRUE);
+   }
    EXIT();
    return;
 }
@@ -8313,44 +8449,54 @@ void wlan_hdd_mon_set_typesubtype( hdd_mon_ctx_t *pMonCtx,int type)
      pMonCtx->typeSubtypeBitmap |= 0xFFFF00000000;
 }
 
-VOS_STATUS wlan_hdd_mon_poststartmsg( hdd_mon_ctx_t *pMonCtx )
+VOS_STATUS wlan_hdd_mon_postMsg(tANI_U32 *magic, struct completion *cmpVar,
+                                hdd_mon_ctx_t *pMonCtx , void* callback)
 {
     vos_msg_t    monMsg;
+    tSirMonModeReq *pMonModeReq;
 
-    monMsg.type = WDA_MON_START_REQ;
-    monMsg.reserved = 0;
-    monMsg.bodyptr = (v_U8_t*)pMonCtx;
-    monMsg.bodyval = 0;
-
-    if (VOS_STATUS_SUCCESS != vos_mq_post_message(
-        VOS_MODULE_ID_WDA,(vos_msg_t *)&monMsg)) {
-        hddLog(VOS_TRACE_LEVEL_ERROR,"%s: : Failed to post Msg to HAL",__func__);
+    if (MON_MODE_START == pMonCtx->state)
+        monMsg.type = WDA_MON_START_REQ;
+    else if (MON_MODE_STOP == pMonCtx->state)
+        monMsg.type = WDA_MON_STOP_REQ;
+    else {
+        hddLog(VOS_TRACE_LEVEL_ERROR,
+                FL("invalid monitor state %d"), pMonCtx->state);
         return VOS_STATUS_E_FAILURE;
     }
 
-   return VOS_STATUS_SUCCESS;
-}
+    pMonModeReq = vos_mem_malloc(sizeof(tSirMonModeReq));
+    if (pMonModeReq == NULL) {
+        hddLog(VOS_TRACE_LEVEL_ERROR,
+                FL("fail to allocate memory for monitor mode req"));
+        return VOS_STATUS_E_FAILURE;
+    }
 
-void wlan_hdd_mon_poststopmsg(void)
-{
-    vos_msg_t    monMsg;
+    pMonModeReq->magic = magic;
+    pMonModeReq->cmpVar = cmpVar;
+    pMonModeReq->data = pMonCtx;
+    pMonModeReq->callback = callback;
 
-    monMsg.type = WDA_MON_STOP_REQ;
     monMsg.reserved = 0;
-    monMsg.bodyptr = NULL;
+    monMsg.bodyptr = pMonModeReq;
     monMsg.bodyval = 0;
 
     if (VOS_STATUS_SUCCESS != vos_mq_post_message(
         VOS_MODULE_ID_WDA,(vos_msg_t *)&monMsg)) {
         hddLog(VOS_TRACE_LEVEL_ERROR,"%s: : Failed to post Msg to HAL",__func__);
+        vos_mem_free(pMonModeReq);
     }
+    return VOS_STATUS_SUCCESS;
 }
 
 void wlan_hdd_mon_close(hdd_context_t *pHddCtx)
 {
     VOS_STATUS vosStatus;
     v_CONTEXT_t pVosContext = pHddCtx->pvosContext;
-    struct wiphy *wiphy = pHddCtx->wiphy;
+    long ret;
+    hdd_mon_ctx_t *pMonCtx = NULL;
+    v_U32_t magic;
+    struct completion cmpVar;
 
     hdd_adapter_t *pAdapter = hdd_get_adapter(pHddCtx,WLAN_HDD_MONITOR);
     if(pAdapter == NULL || pVosContext == NULL)
@@ -8359,7 +8505,28 @@ void wlan_hdd_mon_close(hdd_context_t *pHddCtx)
         return ;
     }
 
-   wlan_hdd_mon_poststopmsg();
+    pMonCtx =  WLAN_HDD_GET_MONITOR_CTX_PTR(pAdapter);
+    if (pMonCtx!= NULL && pMonCtx->state == MON_MODE_START) {
+        pMonCtx->state = MON_MODE_STOP;
+        magic = MON_MODE_MSG_MAGIC;
+        init_completion(&cmpVar);
+        if (VOS_STATUS_SUCCESS !=
+                      wlan_hdd_mon_postMsg(&magic, &cmpVar,
+                                            pMonCtx, hdd_monPostMsgCb)) {
+             VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                       FL("failed to post MON MODE REQ"));
+             pMonCtx->state = MON_MODE_START;
+             magic = 0;
+             return;
+        }
+        ret = wait_for_completion_timeout(&cmpVar, MON_MODE_MSG_TIMEOUT);
+        magic = 0;
+        if (ret <= 0 ) {
+            VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                    FL("timeout on monitor mode completion %ld"), ret);
+        }
+    }
+
    hdd_UnregisterWext(pAdapter->dev);
 
    vos_mon_stop( pVosContext );
@@ -8387,15 +8554,26 @@ void wlan_hdd_mon_close(hdd_context_t *pHddCtx)
        nl_srv_exit();
    #endif
 
-   if (pHddCtx->cfg_ini)
-   {
-       kfree(pHddCtx->cfg_ini);
-       pHddCtx->cfg_ini= NULL;
-   }
    hdd_close_all_adapters( pHddCtx );
-
-   wiphy_free(wiphy) ;
-
+}
+/**
+ * hdd_wlan_free_wiphy_channels - free Channel pointer for wiphy
+ * @ wiphy: the wiphy to validate against
+ *
+ * Return: void
+ */
+void hdd_wlan_free_wiphy_channels(struct wiphy *wiphy)
+{
+    int i =0;
+    for (i = 0; i < IEEE80211_NUM_BANDS; i++)
+    {
+        if (NULL != wiphy->bands[i] &&
+                (NULL != wiphy->bands[i]->channels))
+        {
+            vos_mem_free(wiphy->bands[i]->channels);
+            wiphy->bands[i]->channels = NULL;
+        }
+    }
 }
 /**---------------------------------------------------------------------------
 
@@ -8426,7 +8604,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
    {
       hddLog(VOS_TRACE_LEVEL_ERROR,"%s: MONITOR MODE",__func__);
       wlan_hdd_mon_close(pHddCtx);
-      return;
+      goto free_hdd_ctx;
    }
    else if (VOS_FTM_MODE != hdd_get_conparam())
    {
@@ -8658,6 +8836,7 @@ void hdd_wlan_exit(hdd_context_t *pHddCtx)
       VOS_TRACE( VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_FATAL,
          "%s: Failed to stop VOSS",__func__);
       VOS_ASSERT( VOS_IS_STATUS_SUCCESS( vosStatus ) );
+      VOS_BUG(0);
    }
 
    //This requires pMac access, Call this before vos_close().
@@ -8731,11 +8910,13 @@ free_hdd_ctx:
        pHddCtx->cfg_ini= NULL;
    }
 
-   /* FTM mode, WIPHY did not registered
+   /* FTM/MONITOR mode, WIPHY did not registered
       If un-register here, system crash will happen */
-   if (VOS_FTM_MODE != hdd_get_conparam())
+   if (!(VOS_FTM_MODE == hdd_get_conparam() ||
+            VOS_MONITOR_MODE == hdd_get_conparam()))
    {
       wiphy_unregister(wiphy) ;
+      hdd_wlan_free_wiphy_channels(wiphy);
    }
    wiphy_free(wiphy) ;
    if (hdd_is_ssr_required())
@@ -9462,6 +9643,8 @@ int hdd_wlan_startup(struct device *dev )
    init_completion(&pHddCtx->wiphy_channel_update_event);
    init_completion(&pHddCtx->ssr_comp_var);
 
+   hdd_init_ll_stats_ctx(pHddCtx);
+
 #ifdef CONFIG_ENABLE_LINUX_REG
    init_completion(&pHddCtx->linux_reg_req);
 #else
@@ -9806,6 +9989,7 @@ int hdd_wlan_startup(struct device *dev )
    if ( !VOS_IS_STATUS_SUCCESS( status ) )
    {
       hddLog(VOS_TRACE_LEVEL_FATAL,"%s: vos_start failed",__func__);
+      VOS_BUG(0);
       goto err_vosclose;
    }
 
@@ -10110,7 +10294,8 @@ int hdd_wlan_startup(struct device *dev )
        //EAPOL and DHCP
        if (!pHddCtx->cfg_ini->gEnableDebugLog)
            pHddCtx->cfg_ini->gEnableDebugLog =
-           VOS_PKT_PROTO_TYPE_EAPOL | VOS_PKT_PROTO_TYPE_DHCP;
+           VOS_PKT_PROTO_TYPE_EAPOL | VOS_PKT_PROTO_TYPE_DHCP |
+           VOS_PKT_PROTO_TYPE_ARP;
    }
 
    if (pHddCtx->cfg_ini->wlanLoggingEnable &&
@@ -10258,6 +10443,8 @@ err_close_adapter:
 err_unregister_wiphy:
 #endif
    wiphy_unregister(wiphy) ;
+   hdd_wlan_free_wiphy_channels(wiphy);
+
 err_vosstop:
    vos_stop(pVosContext);
 
@@ -11733,19 +11920,9 @@ VOS_STATUS hdd_sta_id_hash_add_entry(hdd_adapter_t *pAdapter,
     uint16 index;
     hdd_staid_hash_node_t *sta_info_node = NULL;
 
-    spin_lock_bh( &pAdapter->sta_hash_lock);
-    if (pAdapter->is_sta_id_hash_initialized != VOS_TRUE) {
-        spin_unlock_bh( &pAdapter->sta_hash_lock);
-        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                  "%s: hash is not initialized for session id %d",
-                  __func__, pAdapter->sessionId);
-        return VOS_STATUS_E_FAILURE;
-    }
-
     index = hdd_sta_id_hash_calculate_index(pAdapter, mac_addr);
     sta_info_node = vos_mem_malloc(sizeof(hdd_staid_hash_node_t));
     if (!sta_info_node) {
-        spin_unlock_bh( &pAdapter->sta_hash_lock);
         VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
                   "%s: malloc failed", __func__);
         return VOS_STATUS_E_NOMEM;
@@ -11753,6 +11930,16 @@ VOS_STATUS hdd_sta_id_hash_add_entry(hdd_adapter_t *pAdapter,
 
     sta_info_node->sta_id = sta_id;
     vos_mem_copy(&sta_info_node->mac_addr, mac_addr, sizeof(v_MACADDR_t));
+
+    spin_lock_bh( &pAdapter->sta_hash_lock);
+    if (pAdapter->is_sta_id_hash_initialized != VOS_TRUE) {
+        spin_unlock_bh( &pAdapter->sta_hash_lock);
+        vos_mem_free(sta_info_node);
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+                  "%s: hash is not initialized for session id %d",
+                  __func__, pAdapter->sessionId);
+        return VOS_STATUS_E_FAILURE;
+    }
 
     hdd_list_insert_back ( &pAdapter->sta_id_hash.bins[index],
                            (hdd_list_node_t*) sta_info_node );

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2015 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -86,6 +86,46 @@
 //Macro to indicate invalid no of tspecs
 #define INVALID_TSPEC 100
 
+/**
+ * ALLOWED_ACTION_FRAMES_BITMAP
+ *
+ * Bitmask is based on the below.The frames with 0's
+ * set to their corresponding bit can be dropped in FW.
+ *
+ * -----------------------------+-----+-------+
+ *         Type                 | Bit | Allow |
+ * -----------------------------+-----+-------+
+ * SIR_MAC_ACTION_SPECTRUM_MGMT    0      1
+ * SIR_MAC_ACTION_QOS_MGMT         1      1
+ * SIR_MAC_ACTION_DLP              2      0
+ * SIR_MAC_ACTION_BLKACK           3      1
+ * SIR_MAC_ACTION_PUBLIC_USAGE     4      1
+ * SIR_MAC_ACTION_RRM              5      1
+ * SIR_MAC_ACTION_FAST_BSS_TRNST   6      0
+ * SIR_MAC_ACTION_HT               7      0
+ * SIR_MAC_ACTION_SA_QUERY         8      1
+ * SIR_MAC_ACTION_PROT_DUAL_PUB    9      0
+ * SIR_MAC_ACTION_WNM             10      1
+ * SIR_MAC_ACTION_UNPROT_WNM      11      0
+ * SIR_MAC_ACTION_TDLS            12      0
+ * SIR_MAC_ACITON_MESH            13      0
+ * SIR_MAC_ACTION_MHF             14      0
+ * SIR_MAC_SELF_PROTECTED         15      0
+ * SIR_MAC_ACTION_WME             17      1
+ * SIR_MAC_ACTION_FST             18      0
+ * SIR_MAC_ACTION_VHT             21      1
+ * ----------------------------+------+-------+
+ */
+#define ALLOWED_ACTION_FRAMES_BITMAP \
+             ((1 << SIR_MAC_ACTION_SPECTRUM_MGMT) | \
+              (1 << SIR_MAC_ACTION_QOS_MGMT) | \
+              (1 << SIR_MAC_ACTION_BLKACK) | \
+              (1 << SIR_MAC_ACTION_PUBLIC_USAGE) | \
+              (1 << SIR_MAC_ACTION_RRM) | \
+              (1 << SIR_MAC_ACTION_SA_QUERY) | \
+              (1 << SIR_MAC_ACTION_WNM) | \
+              (1 << SIR_MAC_ACTION_WME) | \
+              (1 << SIR_MAC_ACTION_VHT))
 /*-------------------------------------------------------------------------- 
   Type declarations
   ------------------------------------------------------------------------*/
@@ -3576,6 +3616,7 @@ eHalStatus sme_AddChAvoidCallback
 );
 #endif /* FEATURE_WLAN_CH_AVOID */
 eHalStatus sme_UpdateConnectDebug(tHalHandle hHal, tANI_U32 set_value);
+
 /* ---------------------------------------------------------------------------
     \fn sme_requestTypetoString
     \brief API to convert requestType enum values
@@ -3709,5 +3750,12 @@ tANI_BOOLEAN sme_handleSetFccChannel(tHalHandle hHal,
 eHalStatus sme_DeleteAllTDLSPeers(tHalHandle hHal, uint8_t sessionId);
 eHalStatus sme_fatal_event_logs_req(tHalHandle hHal, tANI_U32 is_fatal,
                                tANI_U32 indicator, tANI_U32 reason_code);
+
+eHalStatus sme_enableDisableChanAvoidIndEvent(tHalHandle hHal,
+                                              tANI_U8 set_value);
+
+eHalStatus sme_GetCurrentAntennaIndex(tHalHandle hHal,
+                                      tCsrAntennaIndexCallback callback,
+                                      void *pContext, tANI_U8 sessionId);
 
 #endif //#if !defined( __SME_API_H )
